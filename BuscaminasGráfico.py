@@ -12,11 +12,58 @@ ajustes = {
     "celdasY": 10, # Cantidad de celdas en el eje Y
     "anchoCelda": 30, # Ancho de una celda
     "altoCelda": 30, # Alto de una celda
-    "bombas": 10, # Cantidad de bombas
+    "bombas": 0, # Cantidad de bombas, no modificar, valor que se actualiza solo tras la carga de una partida
     "titulo": "Buscaminas", # Título de la ventana
     "banderaCaracter": "", # Caracter de una bandera
-    "bombaCaracter": "*" # Caracter de una bomba
+    "bombaCaracter": "*", # Caracter de una bomba
+    "maximoBombas": 0, # Número máximo de bombas (nBombas = int((celdasX * celdasY) / 6)), se actualiza solo, no modificar
+    "dificultad": 10 # 1 -> Imposible (no escribir), 10 -> sencillo
 }
+
+# MÉTODO PARA CAMBIAR LAS DIMENSIONES
+def cambiarDimensiones():
+    try:
+        # El usuario es preguntado por los datos nuevos
+        celdas = simpledialog.askstring(title="Cambiar dimensión", prompt="ancho x alto:").split("x")
+        
+        # Se intenta realizar una conversión de string a enteros
+        celdasX = int(celdas[0])
+        celdasY = int(celdas[1])
+        
+        # Se verifica que el valor aportado es válido
+        if celdasX in range(3, 11) and celdasY in range(3, 11):
+            # En ese caso, le pasa los datos a otro método para que actualice las dimensiones
+            actualizarDimensiones(celdasX, celdasY)
+    except:
+        # Pasa del error
+        pass
+
+# Actualiza las dimensiones con unos valores aportados
+def actualizarDimensiones(cantidadX, cantidadY):    
+    # Oculta todos los botones
+    # En el eje Y
+    for i in range(ajustes["celdasY"]):
+        # En el eje X
+        for j in range(ajustes["celdasX"]):
+            # Los oculta, pero no los destruye
+            tablero[i][j].place_forget()
+    
+    # Actualiza la información
+    ajustes["celdasX"] = cantidadX
+    ajustes["celdasY"] = cantidadY
+    
+    # Muestra aquellos botones que si existen
+    for i in range(ajustes["celdasY"]):
+        for j in range(ajustes["celdasX"]):
+            tablero[i][j].place(
+                x = j * ajustes["anchoCelda"],
+                y = i * ajustes["altoCelda"] + 30, # +30 por el margen superior de los datos
+                width = ajustes["anchoCelda"],
+                height = ajustes["altoCelda"]
+            )
+    
+    # Repite la partida de nuevo (actualizar)
+    repetir()
 
 # FUNCIÓN PARA MOSTRAR MENSAJES EMERGENTES CON TÍTULO Y CONTENIDO
 def mostrarMensajeEmergente(mensaje, titulo):
@@ -33,8 +80,8 @@ def cambiarCantidadBombas():
         bombas = int(bombas)
         
         # Evita que el número sea muy pequeño o excesivamente grande
-        if bombas <= 1 or bombas > 21:
-            mostrarMensajeEmergente("No puedes crear más de 20 y menos de 1", "Error cambiando el número de bombas")
+        if bombas <= 1 or bombas > ajustes["maximoBombas"]:
+            mostrarMensajeEmergente(f"No puedes crear más de {ajustes['maximoBombas']} y menos de 1", "Error cambiando el número de bombas")
         else:
             # Si todo es correcto, actualiza el número de bombas de los ajustes y repite la partida
             ajustes["bombas"] = bombas
@@ -61,19 +108,33 @@ def cambiarCaracterBomba():
         # Pasa del error, puede desencadenarse por un texto excesivamente largo, y tal vez el programa no lo soporta
         pass
 
+# FUNCIÓN PARA ESTABLECER UN NÚMERO APROPIADO DE BOMBAS
+def setNumeroApropiadoBombas():
+    # Indica que modificará la variable global banderas
+    global banderas
+    
+    # Realiza un cálculo para obtener un número máximo de bombas
+    ajustes["maximoBombas"] = int((ajustes["celdasY"] * ajustes["celdasX"]) / ajustes["dificultad"])
+    
+    # Establece el número de bombas según el máximo indicado
+    ajustes["bombas"] = ajustes["maximoBombas"]
+    
+    # Actualiza el valor global
+    banderas = ajustes["bombas"]
+    
+    # Actualiza el texto
+    textoBanderas.config(text=f"Banderas: {banderas}")
+
 # FUNCIÓN PARA REPETIR EL JUEGO
 def repetir():
     # Declara las variables de uso global para que sean accesibles
-    global banderas, finalJuego, solucion, intentos
+    global tablero, finalJuego, solucion, intentos
     
     # Define un nuevo tablero, menciona que el final del juego está a 0, las banderas a los ajustes actuales y los intentos a 0
     solucion = definirTablero(ajustes["celdasX"], ajustes["celdasY"], 0)
     finalJuego = False
-    banderas = ajustes["bombas"]
+    setNumeroApropiadoBombas()
     intentos = 0
-    
-    # Actualiza el texto de la bandera
-    textoBanderas.config(text=f"Banderas: {banderas}")
     
     # Resetea cada uno de los botones
     # Bucle para el eje Y
@@ -109,6 +170,7 @@ barraMenu = Menu(ventana)
 juegoOpcion = Menu(barraMenu, tearoff=0)
 # Subopciones (repetir la partida o cerrar la ventana)
 juegoOpcion.add_command(label="Repetir", command=repetir)
+juegoOpcion.add_command(label="Cambiar dimensiones", command=cambiarDimensiones)
 juegoOpcion.add_separator() # Añade una línea de separación
 juegoOpcion.add_command(label="Cerrar", command=ventana.destroy)
 
@@ -207,6 +269,7 @@ def comprobarVictoria():
 
 # FUNCIÓN DE CLICK NORMAL DEL USUARIO SOBRE EL BOTÓN (POR COORDENADAS)
 def deshabilitar(x, y):
+    
     # Menciona que los intentos y las banderas son globales
     global intentos, banderas
     
@@ -256,7 +319,10 @@ def deshabilitar(x, y):
                             # Si el botón no está en DISABLED, puede ser pulsado por el programa
                             # De este modo, se buscan todas las casillas con 0 bombas a su alrededor
                             # Se evita que el usuario tenga que hacer esta tarea
-                            tablero[i][j].invoke()
+                            
+                            # i y j tienen que estar en el rango del número de celdas
+                            if i < ajustes["celdasY"] and j < ajustes["celdasX"]:
+                                boton.invoke()
                     except:
                         # Pasa de largo al darse un error de fuera de rango y continúa en el bucle
                         pass
@@ -384,6 +450,7 @@ def botonDerecho(y, x):
 
 # Inicia las variables de uso global
 iniciarVariables()
+setNumeroApropiadoBombas()
 
 # Crea un tablero fijo al principio de la partida
 # Bucle para el eje Y
